@@ -1,0 +1,96 @@
+---
+title: "Spooky stats tutorial"
+author: "Jill Ashey"
+date: "2025-10-28"
+output: html_document
+---
+
+
+### Load libraries 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggpubr)
+```
+
+### Read in data and check out structure
+
+Data structure 
+
+Normality assessment and data transformations (if needed)
+
+ANOVA
+
+Visualization and saving figures 
+
+
+
+
+
+```{r}
+data <- read_csv("data/coral_patch_seasons.csv")
+head(data)
+str(data)
+
+# Visualization: Boxplots
+ggplot(data, aes(x=pumpkin_patch_nearby, y=growth_rate, fill=season)) +
+  geom_boxplot() +
+  labs(title="Growth Rate by Pumpkin Patch Proximity and Season")
+
+ggplot(data, aes(x=season, y=growth_rate, fill=pumpkin_patch_nearby)) +
+  geom_boxplot() +
+  labs(title="Growth Rate across Seasons by Patch Proximity")
+
+ggplot(data, aes(x=season, y=photosynthesis, fill=pumpkin_patch_nearby)) +
+  geom_boxplot() +
+  labs(title="Photosynthesis Rate across Seasons by Patch Proximity")
+
+# Test for normality (Shapiro-Wilk on growth_rate), split by groups if you like
+shapiro.test(data$growth_rate) # whole dataset
+
+# Or by group:
+by(data$growth_rate, data$pumpkin_patch_nearby, shapiro.test)
+by(data$growth_rate, data$season, shapiro.test)
+
+# Two-way ANOVA: Growth rate by patch and season
+anova1 <- aov(growth_rate ~ pumpkin_patch_nearby * season, data=data)
+summary(anova1)
+TukeyHSD(anova1)
+
+# Two-way ANOVA: Photosynthesis by patch and season
+anova2 <- aov(photosynthesis ~ pumpkin_patch_nearby * season, data=data)
+summary(anova2)
+TukeyHSD(anova2)
+```
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+
+data <- read_csv("data/coral_patch_seasons.csv")
+
+# Visualize histogram and Q-Q plot for photosynthesis
+hist(data$growth_rate, main="Histogram: Photosynthesis (raw)", xlab="Photosynthesis")
+ggqqplot(data$growth_rate, title="Q-Q plot: Photosynthesis (raw)")
+
+# Shapiro-Wilk normality test (raw)
+shapiro.test(data$growth_rate)
+
+# Try log transformation
+data <- data %>%
+  mutate(log_photosynthesis = log(photosynthesis)) %>%
+  mutate(sqrt_photosynthesis = sqrt(photosynthesis))
+
+hist(data$log_photosynthesis, main="Histogram: Log Photosynthesis", xlab="Log Photosynthesis")
+ggqqplot(data$log_photosynthesis, title="Q-Q plot: Log Photosynthesis")
+shapiro.test(data$log_photosynthesis)
+
+# ANOVA with transformed data
+anova_photosyn <- aov(log_photosynthesis ~ pumpkin_patch_nearby * season, data=data)
+summary(anova_photosyn)
+TukeyHSD(anova_photosyn)
+```
+
+
+
