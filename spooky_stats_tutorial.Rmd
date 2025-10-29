@@ -2,8 +2,14 @@
 title: "Spooky stats tutorial"
 author: "Jill Ashey"
 date: "2025-10-28"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
+
+## Spooky stats! 
+
+This tutorial 
 
 
 ### Load libraries 
@@ -12,85 +18,162 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(ggpubr)
+library(ggstatsplot)
+library(car)
 ```
 
-### Read in data and check out structure
+## Data & metadata - reading in, joining, checking structure 
 
-Data structure 
+Read in raw data. The raw data is exactly that - raw quantitative measurements. 
+```{r raw data}
+raw_data <- read.csv("data/coral_patch_seasons.csv")
+head(raw_data)
+str(raw_data)
+```
 
-Normality assessment and data transformations (if needed)
+We have two continuous numerical variables in our dataframe - `growth_rate` and `photosynthesis` - for each coral ID. 
 
-ANOVA
+Read in metadata. Metadata is "data about the data" and provides information that gives context to other data. It helps us understand and use the data correctly. 
+```{r metadata}
+metadata <- read.csv("data/coral_metadata.csv")
+head(metadata)
+str(metadata)
+```
 
-Visualization and saving figures 
+We have two explanatory variables in our metadata - `season` (spring, summer, winter, fall) and `pumpkin_patch_nearby` (Yes or No). 
 
+Join dataframes so data and metadata are in one dataframe.
+```{r join}
+joined_data <- left_join(raw_data, metadata, by = "coral_id")
+head(joined_data)
+str(joined_data)
+```
 
+We will now explore how growth rate and photosynthesis varies by season and presence of a pumpkin patch using ANOVA (Analysis of Variance). ANOVA (Analysis of Variance) compares the average values (means) of groups to see if they differ significantly, considering multiple groups at once. We test two factors here: season and pumpkin patch presence, plus their interaction. The interaction tests if the effect of one factor depends on the other.
 
+## Growth rate data analysis  
 
+### Assess normality 
 
-```{r}
-data <- read_csv("data/coral_patch_seasons.csv")
-head(data)
-str(data)
+To use ANOVAs effectively, our data needs to meet the following assumptions: 
 
-# Visualization: Boxplots
-ggplot(data, aes(x=pumpkin_patch_nearby, y=growth_rate, fill=season)) +
-  geom_boxplot() +
-  labs(title="Growth Rate by Pumpkin Patch Proximity and Season")
+- Data are normally distributed 
+- Variances of groups are homogenous
+- Observations are independent 
 
-ggplot(data, aes(x=season, y=growth_rate, fill=pumpkin_patch_nearby)) +
-  geom_boxplot() +
-  labs(title="Growth Rate across Seasons by Patch Proximity")
+Assess growth rate normality 
+```{r assess raw data normality}
+# Visualize data with histogram and Q-Q plot 
+hist(joined_data$growth_rate, main="Histogram: Growth rate", xlab="Growth rate")
+ggqqplot(joined_data$growth_rate, title="Q-Q plot: Growth rate")
 
-ggplot(data, aes(x=season, y=photosynthesis, fill=pumpkin_patch_nearby)) +
-  geom_boxplot() +
-  labs(title="Photosynthesis Rate across Seasons by Patch Proximity")
+# Shapiro-Wilk normality test
+shapiro.test(joined_data$growth_rate)
 
-# Test for normality (Shapiro-Wilk on growth_rate), split by groups if you like
-shapiro.test(data$growth_rate) # whole dataset
+# Levene test of equal variance
+leveneTest(growth_rate ~ interaction(season, pumpkin_patch_nearby), data = joined_data)
+```
 
-# Or by group:
-by(data$growth_rate, data$pumpkin_patch_nearby, shapiro.test)
-by(data$growth_rate, data$season, shapiro.test)
+Growth rate is normal and meets assumptions of ANOVA! What would we do if the data was NOT normal and/or did not meet ANOVA assumptions?
 
-# Two-way ANOVA: Growth rate by patch and season
-anova1 <- aov(growth_rate ~ pumpkin_patch_nearby * season, data=data)
+### Run ANOVA 
+
+Time to run ANOVA on our data! 
+```{r anova}
+anova1 <- aov(growth_rate ~ pumpkin_patch_nearby * season, data=joined_data)
 summary(anova1)
-TukeyHSD(anova1)
-
-# Two-way ANOVA: Photosynthesis by patch and season
-anova2 <- aov(photosynthesis ~ pumpkin_patch_nearby * season, data=data)
-summary(anova2)
-TukeyHSD(anova2)
 ```
 
-```{r}
-library(tidyverse)
-library(ggpubr)
+Let's break down the ANOVA results table: 
 
-data <- read_csv("data/coral_patch_seasons.csv")
+- Df = Degrees of freedom -- represents how many pieces of information you have to estimate variability for that factor. 
+  - For each factor, df = number of groups - 1. 
+- Sum Sq = Sum of Squares -- tells us how much total variability is explained by differences among groups vs. variation witin groups. 
+  - In our data, SS for pumpkin patch (0.12327) and season (0.13153) are relatively larger compared to the residual SS (0.01513). This means that a substantial portion of total variablity in growth rate is explained by differences in pumpkin patch groups and seasons. 
+- Mean Sq = Mean Square -- represents the average amount of variation attributed to each source per degree of freedom (MS = SS / df). It essentially normalizes the sum of squares to degrees of freedom to estimate variances. 
+- F-value -- ratio that compares variance between group means to the variance within groups (F = MS between groups / Residual MS).
+  - The F-value serves as a "signal-to-noise" ratio: a high F-value indicates a strong signal (meaningful differences among groups), while a low F-value indicates mostly noise (no meaningful group differences).
+  - For hypothesis testing, the F-value is compared to a critical value from the F-distribution (based on degrees of freedom). If the F-value exceeds this threshold, the null hypothesis that all group means are equal is rejected. This determines the Pr(>F). 
+- Pr(>F) -- the p-value associated with the F-statistic. It tells us the probability of obtaining an F-value at least as extreme as the one calculated from our data. 
 
-# Visualize histogram and Q-Q plot for photosynthesis
-hist(data$growth_rate, main="Histogram: Photosynthesis (raw)", xlab="Photosynthesis")
-ggqqplot(data$growth_rate, title="Q-Q plot: Photosynthesis (raw)")
+What are the ANOVA results telling us statistically and biologically? 
 
-# Shapiro-Wilk normality test (raw)
-shapiro.test(data$growth_rate)
+#### Residuals and evaluating residual normality 
 
-# Try log transformation
-data <- data %>%
-  mutate(log_photosynthesis = log(photosynthesis)) %>%
-  mutate(sqrt_photosynthesis = sqrt(photosynthesis))
+Residuals are the differences between observed values and their predicted group means. They indicate how much individual data points deviate from group averages after accounting for the factors in the model. Analyzing residuals helps check model fit and assumptions.
 
-hist(data$log_photosynthesis, main="Histogram: Log Photosynthesis", xlab="Log Photosynthesis")
-ggqqplot(data$log_photosynthesis, title="Q-Q plot: Log Photosynthesis")
-shapiro.test(data$log_photosynthesis)
+```{r residual normality}
+# Extract residuals
+residuals <- residuals(anova1)
 
-# ANOVA with transformed data
-anova_photosyn <- aov(log_photosynthesis ~ pumpkin_patch_nearby * season, data=data)
-summary(anova_photosyn)
-TukeyHSD(anova_photosyn)
+# Histogram of residuals
+hist(residuals, main = "Histogram of Residuals", xlab = "Residuals")
+
+# Q-Q Plot of residuals
+qqnorm(residuals)
+qqline(residuals)
+
+# Residuals vs Fitted Values
+plot(fitted(anova1), residuals,
+xlab = "Fitted Values", ylab = "Residuals",
+main = "Residuals vs Fitted Values")
+abline(h = 0, col = "red")
 ```
 
+Residuals also look normal, which means our model is a good fit for our data. 
 
+### Run post-hoc test
 
+A post-hoc test is conducted after a significant ANOVA result to identify exactly which group means differ from each other. While ANOVA tells you there is at least one significant difference among groups, it does not specify which pairs of groups are different.
+
+Here, we are using Tukey's Honestly Significant Differences (HSD), which compares all possible pairs of group means, while controlling the error rate when testing multiple pairs
+
+```{r post-hoc}
+TukeyHSD(anova1, which = "season")
+TukeyHSD(anova1, which = "pumpkin_patch_nearby")
+
+# What if the interaction term was significant?
+#emm_interaction <- emmeans(anova1, ~ pumpkin_patch_nearby * season)
+#pairs(emm_interaction, adjust = "tukey")
+```
+
+What are the post-hoc results telling us statistically and biologically? 
+
+### Visualize 
+
+Data visualization is a critical part of data analysis, as it is a visual representation of your data. It helps make complex findings easier to interpret and allows the audience to identify important patterns or trends. 
+
+Calculate means and standard errors for each group of `season` and `pumpkin_patch_nearby`. 
+```{r summarize}
+summary_data <- joined_data %>%
+  group_by(season, pumpkin_patch_nearby) %>%
+  summarise(
+    mean_growth = mean(growth_rate, na.rm = TRUE),
+    se_growth = sd(growth_rate, na.rm = TRUE) / sqrt(n()))
+```
+
+Plot means with standard error bars and connecting lines. 
+```{r plot}
+# Order seasons
+summary_data$season <- factor(summary_data$season, levels = c("Spring", "Summer", "Fall", "Winter"))
+
+ggplot(summary_data, aes(x = season, y = mean_growth, color = pumpkin_patch_nearby, group = pumpkin_patch_nearby)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_growth - se_growth, ymax = mean_growth + se_growth), width = 0.2) +
+  scale_color_manual(values = c("Yes" = "orange", "No" = "blue")) +
+  labs(x = "Season", y = "Growth Rate", color = "Pumpkin Patch Nearby") +
+  theme_bw()
+```
+
+What are other ways we could use to visualize this data?
+
+## Photosynthesis data analysis  
+
+### Assess normality 
+
+### Run ANOVA 
+
+### Run post-hoc test 
+
+### Visualize  
