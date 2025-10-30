@@ -9,16 +9,24 @@ output:
 
 ## Spooky stats! 
 
-This tutorial 
+This tutorial contains materials and code for our Halloween-themed lab meeting on basic data analysis and visualization in R. In this Rmd, we will: 
 
+- Read in and look at data files 
+- Assess data normality for ANOVA 
+- Run ANOVA
+- Run post-hoc tests
+- Visualize data 
 
-### Load libraries 
+## Load libraries 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("ggpubr")) install.packages("ggpubr")
+if (!require("car")) install.packages("car")
+
 library(tidyverse)
 library(ggpubr)
-library(ggstatsplot)
 library(car)
 ```
 
@@ -168,7 +176,7 @@ ggplot(summary_data, aes(x = season, y = mean_growth, color = pumpkin_patch_near
 
 What are other ways we could use to visualize this data?
 
-## Photosynthesis data analysis  
+## Photosynthesis data analysis - try it yourself! 
 
 ### Assess normality 
 
